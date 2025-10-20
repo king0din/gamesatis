@@ -1,0 +1,41 @@
+.App {
+    min-height: 100vh;
+}
+
+/* Smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1e3a8a;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #3b82f6;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #2563eb;
+}
+
+/* Video container */
+.aspect-video {
+    aspect-ratio: 16 / 9;
+}
+
+/* Card hover effects */
+.card-hover {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+}
