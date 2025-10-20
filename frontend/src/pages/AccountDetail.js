@@ -217,17 +217,32 @@ const AccountDetail = () => {
                       </div>
                     )}
                     
-                    {/* Video önizleme butonu */}
+                    {/* Video önizleme - hem dosya hem YouTube için */}
                     {(account.video_url || account.video_file) && (
-                      <Button
-                        onClick={() => setVideoPreview(true)}
-                        variant="outline"
-                        className="border-blue-500 text-blue-200 hover:bg-blue-800"
-                        data-testid="video-preview-btn"
-                      >
-                        <Video className="w-4 h-4 mr-2" />
-                        {account.video_url && getVideoEmbedUrl(account.video_url) ? 'YouTube Videoyu İzle' : 'Videoyu İzle'}
-                      </Button>
+                      <div className="space-y-3">
+                        {/* Video dosyası varsa direkt göster */}
+                        {account.video_file && (
+                          <div className="bg-black rounded-lg overflow-hidden aspect-video">
+                            <video
+                              src={`${BACKEND_URL}${account.video_file}`}
+                              controls
+                              className="w-full h-full"
+                            />
+                          </div>
+                        )}
+                        
+                        {/* YouTube varsa iframe veya buton göster */}
+                        {account.video_url && getVideoEmbedUrl(account.video_url) && (
+                          <div className="bg-black rounded-lg overflow-hidden aspect-video">
+                            <iframe
+                              src={getVideoEmbedUrl(account.video_url)}
+                              className="w-full h-full"
+                              allowFullScreen
+                              title="YouTube Video"
+                            />
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}

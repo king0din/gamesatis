@@ -86,6 +86,30 @@ async def get_current_admin(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     return current_user
 
+# Dosya silme helper fonksiyonu
+def delete_file_from_disk(file_path: str):
+    """
+    Disk'ten dosya siler
+    file_path: /uploads/xxxxx.jpg formatında olmalı
+    """
+    try:
+        if file_path and file_path.startswith('/uploads/'):
+            # /uploads/ prefix'ini kaldır
+            filename = file_path.replace('/uploads/', '')
+            full_path = UPLOAD_DIR / filename
+            
+            # Dosya varsa sil
+            if full_path.exists() and full_path.is_file():
+                full_path.unlink()
+                print(f"✅ Deleted file: {full_path}")
+                return True
+            else:
+                print(f"⚠️ File not found: {full_path}")
+                return False
+    except Exception as e:
+        print(f"❌ Error deleting file {file_path}: {e}")
+        return False
+
 
 # Models
 class User(BaseModel):
@@ -321,13 +345,33 @@ async def get_categories():
 
 @api_router.delete("/categories/{category_id}")
 async def delete_category(category_id: str, current_user: dict = Depends(get_current_admin)):
+    # Kategoriye ait tüm hesapları getir
+    accounts = await db.accounts.find({"category_id": category_id}, {"_id": 0}).to_list(1000)
+    
+    # Her hesabın dosyalarını sil
+    total_deleted_files = 0
+    for account in accounts:
+        if account.get("video_file"):
+            if delete_file_from_disk(account["video_file"]):
+                total_deleted_files += 1
+        
+        if account.get("image_file"):
+            if delete_file_from_disk(account["image_file"]):
+                total_deleted_files += 1
+    
+    # Veritabanından kategoriyi sil
     result = await db.categories.delete_one({"id": category_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Category not found")
     
+    # Kategoriye ait hesapları sil
     await db.accounts.delete_many({"category_id": category_id})
     
-    return {"message": "Category deleted successfully"}
+    return {
+        "message": "Category deleted successfully",
+        "deleted_accounts": len(accounts),
+        "deleted_files": total_deleted_files
+    }
 
 # Account Routes
 @api_router.post("/accounts", response_model=Account)
@@ -395,12 +439,32 @@ async def get_account(account_id: str):
 
 @api_router.put("/accounts/{account_id}", response_model=Account)
 async def update_account(account_id: str, input: AccountUpdate, current_user: dict = Depends(get_current_admin)):
+    # Önce mevcut hesabı getir
+    existing_account = await db.accounts.find_one({"id": account_id}, {"_id": 0})
+    
+    if not existing_account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
     update_data = {k: v for k, v in input.model_dump().items() if v is not None}
     
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    # Eğer yeni video_file geliyorsa, eski video_file'ı sil
+    if 'video_file' in update_data and update_data['video_file']:
+        old_video = existing_account.get('video_file')
+        if old_video and old_video != update_data['video_file']:
+            delete_file_from_disk(old_video)
+            print(f"🗑️ Deleted old video file")
+    
+    # Eğer yeni image_file geliyorsa, eski image_file'ı sil
+    if 'image_file' in update_data and update_data['image_file']:
+        old_image = existing_account.get('image_file')
+        if old_image and old_image != update_data['image_file']:
+            delete_file_from_disk(old_image)
+            print(f"🗑️ Deleted old image file")
     
     # If status changed to sold, set sold_at
     if update_data.get('status') == 'sold':
@@ -426,11 +490,36 @@ async def update_account(account_id: str, input: AccountUpdate, current_user: di
 
 @api_router.delete("/accounts/{account_id}")
 async def delete_account(account_id: str, current_user: dict = Depends(get_current_admin)):
+    # Önce hesabı getir (dosya yollarını almak için)
+    account = await db.accounts.find_one({"id": account_id}, {"_id": 0})
+    
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    # Veritabanından sil
     result = await db.accounts.delete_one({"id": account_id})
+    
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Account not found")
     
-    return {"message": "Account deleted successfully"}
+    # İlgili dosyaları diskten sil
+    deleted_files = []
+    
+    # Video dosyasını sil
+    if account.get("video_file"):
+        if delete_file_from_disk(account["video_file"]):
+            deleted_files.append("video")
+    
+    # Resim dosyasını sil
+    if account.get("image_file"):
+        if delete_file_from_disk(account["image_file"]):
+            deleted_files.append("image")
+    
+    message = "Account deleted successfully"
+    if deleted_files:
+        message += f" (deleted files: {', '.join(deleted_files)})"
+    
+    return {"message": message, "deleted_files": deleted_files}
 
 # File Upload Routes
 @api_router.post("/upload/video")
@@ -634,9 +723,7 @@ async def create_shopier_payment(account_id: str, current_user: dict = Depends(g
                     "order_id": order_id
                 }
             else:
-                raise HTTPException(status_code=400, detail=f"Payment URL not received: {result}")
-        else:
-            raise HTTPException(status_code=400, detail=f"Shopier API error: {response.status_code}")
+                raise HTTPException(status_code=400, detail=f"Shopier API error: {response.status_code}")
     
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Payment request error: {str(e)}")
@@ -753,12 +840,6 @@ async def serve_react_app(full_path: str):
     if index_file.exists():
         return FileResponse(index_file)
     return {"message": "Frontend not built. Please run npm run build in the frontend directory."}
-
-
-
-
-
-
 
 
 # Configure logging

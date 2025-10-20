@@ -53,7 +53,7 @@ const AdminDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [copiedId, setCopiedId] = useState(null);
-  const [uploadingVideo, setUploadingVideo] = useState(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -313,6 +313,7 @@ const AdminDashboard = () => {
       let videoFileUrl = editAccount.video_file || '';
       let imageFileUrl = editAccount.image_file || '';
       
+      // Yeni video yükleniyorsa
       if (editVideoFile) {
         toast.loading('Yeni video yükleniyor...', { id: loadingToast });
         const formData = new FormData();
@@ -323,6 +324,7 @@ const AdminDashboard = () => {
         videoFileUrl = uploadResponse.data.url;
       }
       
+      // Yeni resim yükleniyorsa
       if (editImageFile) {
         toast.loading('Yeni resim yükleniyor...', { id: loadingToast });
         const formData = new FormData();
@@ -333,6 +335,7 @@ const AdminDashboard = () => {
         imageFileUrl = uploadResponse.data.url;
       }
       
+      // Backend güncellemesi - backend eski dosyaları otomatik silecek
       await axios.put(`${API}/accounts/${editAccount.id}`, {
         name: editAccount.name,
         price: parseFloat(editAccount.price),
